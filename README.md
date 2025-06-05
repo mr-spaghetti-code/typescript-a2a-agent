@@ -1,3 +1,7 @@
+This repo showcases a very simple agent implemented in TypeScript that uses A2A.
+
+[![Try it yourself](https://replit.com/badge?caption=Try%20it%20yourself)](https://replit.new/github.com/mr-spaghetti-code/typescript-a2a-agent)
+
 ## Agents
 
 - [Weather Agent](src/agents/weather-agent/README.md)
