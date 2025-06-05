@@ -4,21 +4,19 @@
 
 ## Testing the Agents
 
-First, follow the instructions in the agent's README file, then run `npx tsx ./cli.ts` to start up a command-line client to talk to the agents. Example:
-
-1. Navigate to the samples/js directory:
-    ```bash
-    cd samples/js
-    ```
-2. Run npm install:
+1. Run npm install:
+   
     ```bash
     npm install
     ```
-3. Run an agent:
-```bash
-export ANTHROPIC_API_KEY=<your_api_key>
-npm run agents:weather-agent
+2. Run the agent:
+    ```bash
+    export ANTHROPIC_API_KEY=<your_api_key>
+    npm run agents:weather-agent
+    ```
+    Your agent will now be live at http://localhost:41241/. If you've deployed this on Replit, it will also be reachable in your configured URL.
 
-# in a separate terminal
-npm run a2a:cli [Optional: the agent URL]
-```
+4. In a separate terminal or machine
+    ```bash
+    npm run a2a:cli [Agent URL (optional)]
+    ```
