@@ -20,5 +20,5 @@ export ANTHROPIC_API_KEY=<your_api_key>
 npm run agents:weather-agent
 
 # in a separate terminal
-npm run a2a:cli
+npm run a2a:cli [Optional: the agent URL]
 ```
