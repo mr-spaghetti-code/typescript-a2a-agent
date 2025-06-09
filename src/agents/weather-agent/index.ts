@@ -346,6 +346,9 @@ async function main() {
   const PORT = process.env.PORT || 41241;
   expressApp.listen(PORT, () => {
     console.log(
+      `[WeatherAgent] A2A UI: https://catena-weather-agent.replit.app/a2a-ui`,
+    );
+    console.log(
       `[WeatherAgent] Server using new framework started on https://catena-weather-agent.replit.app/`,
     );
     console.log(
