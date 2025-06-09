@@ -42,6 +42,7 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
+  private apiVariant?: 'typescript' | 'python'; // Track which API variant to use
 
   /**
    * Constructs an A2AClient instance.
@@ -185,6 +186,40 @@ export class A2AClient {
     return rpcResponse as TResponse;
   }
 
+  /**
+   * Detects which A2A API variant the agent supports by trying to determine from context.
+   * This is a heuristic approach since there's no standard way to detect this.
+   */
+  private async _detectApiVariant(): Promise<'typescript' | 'python'> {
+    if (this.apiVariant) {
+      return this.apiVariant;
+    }
+
+    const agentCard = await this.agentCardPromise;
+    
+    // Try to detect based on agent card properties or other heuristics
+    // For now, we'll default to typescript variant and fall back to python if needed
+    // This could be enhanced with more sophisticated detection logic
+    
+    this.apiVariant = 'typescript'; // Default assumption
+    return this.apiVariant;
+  }
+
+  /**
+   * Helper method to convert between TypeScript and Python part formats
+   */
+  private _convertPartsForPythonApi(parts: any[]): any[] {
+    return parts.map(part => {
+      if (part.kind === 'text') {
+        return { type: 'text', text: part.text };
+      } else if (part.kind === 'file') {
+        return { type: 'file', file: part.file };
+      } else if (part.kind === 'data') {
+        return { type: 'data', data: part.data };
+      }
+      return part;
+    });
+  }
 
   /**
    * Sends a message to the agent.
@@ -195,7 +230,79 @@ export class A2AClient {
    * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
    */
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
+    const apiVariant = await this._detectApiVariant();
+    
+    if (apiVariant === 'python') {
+      // Try Python API format first
+      try {
+        return await this._sendMessagePythonApi(params);
+      } catch (error: any) {
+        // If Python API fails, try TypeScript API as fallback
+        if (error.message.includes('Method not found') || error.message.includes('404') || error.message.includes('-32601')) {
+          console.log('Python API failed, trying TypeScript API...');
+          this.apiVariant = 'typescript';
+          return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
+        }
+        throw error;
+      }
+    } else {
+      // Try TypeScript API first
+      try {
+        return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
+      } catch (error: any) {
+        // If TypeScript API fails, try Python API as fallback
+        if (error.message.includes('Method not found') || error.message.includes('404') || error.message.includes('-32601')) {
+          console.log('TypeScript API failed, trying Python API...');
+          this.apiVariant = 'python';
+          return await this._sendMessagePythonApi(params);
+        }
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Helper method for Python A2A API format (tasks/send)
+   */
+  private async _sendMessagePythonApi(params: MessageSendParams): Promise<SendMessageResponse> {
+    // Generate a task ID if not provided
+    const taskId = params.message.taskId || this._generateTaskId();
+    
+    // Generate a session ID - this is required by Python API
+    const sessionId = this._generateTaskId();
+    
+    // Convert message parts to Python format
+    const convertedParts = this._convertPartsForPythonApi(params.message.parts);
+    
+    // Create Python API payload - this matches the TaskSendParams structure expected by Python server
+    const pythonParams = {
+      id: taskId,
+      sessionId: sessionId,
+      message: {
+        messageId: params.message.messageId,
+        role: params.message.role,
+        parts: convertedParts,
+        ...(params.message.metadata && { metadata: params.message.metadata }),
+        ...(params.message.referenceTaskIds && { referenceTaskIds: params.message.referenceTaskIds })
+      },
+      // Configuration fields at top level for Python API
+      ...(params.configuration && { 
+        blocking: params.configuration.blocking !== false, // Default to true for non-streaming
+        acceptedOutputModes: params.configuration.acceptedOutputModes || ["text/plain"],
+        ...(params.configuration.historyLength && { historyLength: params.configuration.historyLength }),
+        ...(params.configuration.pushNotificationConfig && { pushNotification: params.configuration.pushNotificationConfig })
+      }),
+      ...(params.metadata && { metadata: params.metadata })
+    };
+
+    return this._postRpcRequest<any, SendMessageResponse>("tasks/send", pythonParams);
+  }
+
+  /**
+   * Generate a unique task ID
+   */
+  private _generateTaskId(): string {
+    return `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -213,6 +320,25 @@ export class A2AClient {
       throw new Error("Agent does not support streaming (AgentCard.capabilities.streaming is not true).");
     }
 
+    const apiVariant = await this._detectApiVariant();
+    
+    if (apiVariant === 'python') {
+      try {
+        yield* this._sendMessageStreamPythonApi(params);
+        return;
+      } catch (error: any) {
+        // If Python API fails, try TypeScript API as fallback
+        if (error.message.includes('establishing stream') && (error.message.includes('404') || error.message.includes('Method not found'))) {
+          console.log('Python streaming API failed, trying TypeScript API...');
+          this.apiVariant = 'typescript';
+          // Continue to TypeScript API below
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // TypeScript API (original implementation)
     const endpoint = await this._getServiceEndpoint();
     const clientRequestId = this.requestIdCounter++; // Use a unique ID for this stream request
     const rpcRequest: JSONRPCRequest = { // This is the initial JSON-RPC request to establish the stream
@@ -232,6 +358,14 @@ export class A2AClient {
     });
 
     if (!response.ok) {
+      // If this fails and we haven't tried Python API yet, try it as fallback
+      if (this.apiVariant !== 'python' && (response.status === 404 || response.status === 400)) {
+        console.log('TypeScript streaming API failed, trying Python API...');
+        this.apiVariant = 'python';
+        yield* this._sendMessageStreamPythonApi(params);
+        return;
+      }
+
       // Attempt to read error body for more details
       let errorBody = "";
       try {
@@ -255,6 +389,88 @@ export class A2AClient {
     // Yield events from the parsed SSE stream.
     // Each event's 'data' field is a JSON-RPC response.
     yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
+  }
+
+  /**
+   * Helper method for Python A2A streaming API (also uses tasks/send but with streaming headers)
+   */
+  private async *_sendMessageStreamPythonApi(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
+    // Generate a task ID if not provided
+    const taskId = params.message.taskId || this._generateTaskId();
+    
+    // Generate a session ID - this is required by Python API
+    const sessionId = this._generateTaskId();
+    
+    // Convert message parts to Python format
+    const convertedParts = this._convertPartsForPythonApi(params.message.parts);
+    
+    // Create Python API payload - streaming version still uses tasks/send 
+    const pythonParams = {
+      id: taskId,
+      sessionId: sessionId,
+      message: {
+        messageId: params.message.messageId,
+        role: params.message.role,
+        parts: convertedParts,
+        ...(params.message.metadata && { metadata: params.message.metadata }),
+        ...(params.message.referenceTaskIds && { referenceTaskIds: params.message.referenceTaskIds })
+      },
+      // For streaming, we set blocking to false and use streaming headers
+      blocking: false,
+      ...(params.configuration && { 
+        acceptedOutputModes: params.configuration.acceptedOutputModes || ["text/plain"],
+        ...(params.configuration.historyLength && { historyLength: params.configuration.historyLength }),
+        ...(params.configuration.pushNotificationConfig && { pushNotification: params.configuration.pushNotificationConfig })
+      }),
+      ...(params.metadata && { metadata: params.metadata })
+    };
+
+    const endpoint = await this._getServiceEndpoint();
+    const clientRequestId = this.requestIdCounter++;
+    const rpcRequest: JSONRPCRequest = {
+      jsonrpc: "2.0",
+      method: "tasks/send",  // Python streaming also uses tasks/send, not tasks/stream
+      params: pythonParams,
+      id: clientRequestId,
+    };
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",  // This tells the Python server to stream
+      },
+      body: JSON.stringify(rpcRequest),
+    });
+
+    if (!response.ok) {
+      let errorBody = "";
+      try {
+        errorBody = await response.text();
+        const errorJson = JSON.parse(errorBody);
+        if (errorJson.error) {
+          throw new Error(`HTTP error establishing stream for tasks/send: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+        }
+      } catch (e: any) {
+        if (e.message.startsWith('HTTP error establishing stream')) throw e;
+        throw new Error(`HTTP error establishing stream for tasks/send: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`);
+      }
+      throw new Error(`HTTP error establishing stream for tasks/send: ${response.status} ${response.statusText}`);
+    }
+
+    // Check if streaming response or regular response
+    const contentType = response.headers.get("Content-Type");
+    if (contentType?.startsWith("text/event-stream")) {
+      // SSE streaming response
+      yield* this._parseA2ASseStream<A2AStreamEventData>(response, clientRequestId);
+    } else {
+      // Regular JSON response - convert to streaming format
+      const jsonResponse = await response.json();
+      if (jsonResponse.result) {
+        // Emit the result as a single stream event
+        yield jsonResponse.result as A2AStreamEventData;
+      }
+    }
   }
 
   /**

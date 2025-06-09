@@ -23,6 +23,13 @@ export class A2AExpressApp {
     public setupRoutes(app: Express, baseUrl: string = ''): Express {
         app.use(express.json());
 
+        // Request logging middleware
+        app.use((req: Request, res: Response, next) => {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] ${req.method} ${req.url} - ${req.ip || req.connection.remoteAddress}`);
+            next();
+        });
+
         app.get(`${baseUrl}/.well-known/agent.json`, async (req: Request, res: Response) => {
             try {
                 // getAgentCard is on A2ARequestHandler, which DefaultRequestHandler implements

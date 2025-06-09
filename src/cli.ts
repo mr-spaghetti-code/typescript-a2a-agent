@@ -42,6 +42,41 @@ function generateId(): string { // Renamed for more general use
   return crypto.randomUUID();
 }
 
+/**
+ * Normalizes parts from different API formats (TypeScript uses "kind", Python uses "type")
+ */
+function normalizePart(part: any): Part {
+  if (part.kind) {
+    // TypeScript format - already correct
+    return part as Part;
+  } else if (part.type) {
+    // Python format - convert to TypeScript format
+    return {
+      ...part,
+      kind: part.type
+    } as Part;
+  }
+  // Fallback - assume it's already correct or unknown
+  return part as Part;
+}
+
+/**
+ * Normalizes parts array from different API formats
+ */
+function normalizeParts(parts: any[]): Part[] {
+  return parts.map(normalizePart);
+}
+
+/**
+ * Normalizes a message object from different API formats
+ */
+function normalizeMessage(message: any): Message {
+  return {
+    ...message,
+    parts: normalizeParts(message.parts)
+  };
+}
+
 // --- State ---
 let currentTaskId: string | undefined = undefined; // Initialize as undefined
 let currentContextId: string | undefined = undefined; // Initialize as undefined
@@ -133,7 +168,10 @@ function printAgentEvent(
 }
 
 function printMessageContent(message: Message) {
-  message.parts.forEach((part: Part, index: number) => { // Added explicit Part type
+  // Normalize message parts in case they come from Python API
+  const normalizedMessage = normalizeMessage(message);
+  
+  normalizedMessage.parts.forEach((part: Part, index: number) => { // Added explicit Part type
     const partPrefix = colorize("red", `  Part ${index + 1}:`);
     if (part.kind === "text") { // Check kind property
       console.log(`${partPrefix} ${colorize("green", "📝 Text:")}`, part.text);
@@ -316,7 +354,41 @@ async function main() {
             console.log(colorize("gray", `   Task includes ${task.artifacts.length} artifact(s).`));
           }
         } else {
-          console.log(prefix, colorize("yellow", "Received unknown event structure from stream:"), event);
+          // Handle potential Python API responses that might not have the exact same structure
+          console.log(prefix, colorize("yellow", "Received event from stream:"), event);
+          
+          // Try to extract useful information from unknown event structure
+          if (typeof event === 'object' && event !== null) {
+            const eventObj = event as any;
+            
+            // Check if it looks like a task response from Python API
+            if (eventObj.id && eventObj.status) {
+              console.log(`${prefix} ${colorize("blue", "ℹ️ Task Response:")} ID: ${eventObj.id}, Status: ${eventObj.status?.state || 'unknown'}`);
+              if (eventObj.id !== currentTaskId) {
+                console.log(colorize("dim", `   Task ID updated from ${currentTaskId || 'N/A'} to ${eventObj.id}`));
+                currentTaskId = eventObj.id;
+              }
+              if (eventObj.status?.message) {
+                console.log(colorize("gray", "   Task includes message:"));
+                printMessageContent(eventObj.status.message);
+              }
+              if (eventObj.artifacts && eventObj.artifacts.length > 0) {
+                console.log(colorize("gray", `   Task includes ${eventObj.artifacts.length} artifact(s).`));
+                // Print artifact contents
+                eventObj.artifacts.forEach((artifact: any, index: number) => {
+                  console.log(colorize("cyan", `     Artifact ${index + 1}: ${artifact.name || '(unnamed)'}`));
+                  if (artifact.parts) {
+                    printMessageContent({ 
+                      messageId: generateId(), 
+                      kind: "message", 
+                      role: "agent", 
+                      parts: artifact.parts 
+                    });
+                  }
+                });
+              }
+            }
+          }
         }
       }
       console.log(colorize("dim", `--- End of response stream for this input ---`));
