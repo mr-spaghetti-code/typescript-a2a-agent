@@ -42,7 +42,6 @@ export class A2AClient {
   private agentCardPromise: Promise<AgentCard>;
   private requestIdCounter: number = 1;
   private serviceEndpointUrl?: string; // To be populated from AgentCard after fetching
-  private apiVariant?: 'typescript' | 'python'; // Track which API variant to use
 
   /**
    * Constructs an A2AClient instance.
@@ -187,22 +186,39 @@ export class A2AClient {
   }
 
   /**
-   * Detects which A2A API variant the agent supports by trying to determine from context.
-   * This is a heuristic approach since there's no standard way to detect this.
+   * Helper method to systematically try different API formats to ensure compatibility
    */
-  private async _detectApiVariant(): Promise<'typescript' | 'python'> {
-    if (this.apiVariant) {
-      return this.apiVariant;
+  private async _tryMultipleApiFormats<T>(
+    attempts: Array<() => Promise<T>>,
+    operationName: string
+  ): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let i = 0; i < attempts.length; i++) {
+      try {
+        return await attempts[i]();
+             } catch (error: any) {
+         lastError = error;
+         // Check if this is a format-related error, indicating we should try the next format
+         const shouldTryNextFormat = error.message.includes('Method not found') || 
+                                   error.message.includes('404') || 
+                                   error.message.includes('-32601') || // Method not found JSON-RPC error
+                                   error.message.includes('-32600'); // Invalid request JSON-RPC error (payload validation)
+         
+         if (shouldTryNextFormat && i < attempts.length - 1) {
+           console.log(`${operationName} attempt ${i + 1} failed (${error.message.includes('-32600') ? 'payload validation error' : 'method not found'}), trying next format...`);
+           continue;
+         }
+         
+         // If it's not a format-related error, or this is the last attempt, throw the error
+         if (!shouldTryNextFormat || i === attempts.length - 1) {
+           throw error;
+         }
+       }
     }
-
-    const agentCard = await this.agentCardPromise;
     
-    // Try to detect based on agent card properties or other heuristics
-    // For now, we'll default to typescript variant and fall back to python if needed
-    // This could be enhanced with more sophisticated detection logic
-    
-    this.apiVariant = 'typescript'; // Default assumption
-    return this.apiVariant;
+    // This should never be reached, but just in case
+    throw lastError || new Error(`All ${operationName} attempts failed`);
   }
 
   /**
@@ -230,35 +246,15 @@ export class A2AClient {
    * @returns A Promise resolving to SendMessageResponse, which can be a Message, Task, or an error.
    */
   public async sendMessage(params: MessageSendParams): Promise<SendMessageResponse> {
-    const apiVariant = await this._detectApiVariant();
-    
-    if (apiVariant === 'python') {
-      // Try Python API format first
-      try {
-        return await this._sendMessagePythonApi(params);
-      } catch (error: any) {
-        // If Python API fails, try TypeScript API as fallback
-        if (error.message.includes('Method not found') || error.message.includes('404') || error.message.includes('-32601')) {
-          console.log('Python API failed, trying TypeScript API...');
-          this.apiVariant = 'typescript';
-          return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
-        }
-        throw error;
-      }
-    } else {
-      // Try TypeScript API first
-      try {
-        return this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params);
-      } catch (error: any) {
-        // If TypeScript API fails, try Python API as fallback
-        if (error.message.includes('Method not found') || error.message.includes('404') || error.message.includes('-32601')) {
-          console.log('TypeScript API failed, trying Python API...');
-          this.apiVariant = 'python';
-          return await this._sendMessagePythonApi(params);
-        }
-        throw error;
-      }
-    }
+    const attempts = [
+      // First attempt: Standard TypeScript API
+      () => this._postRpcRequest<MessageSendParams, SendMessageResponse>("message/send", params),
+      
+      // Second attempt: Python API format
+      () => this._sendMessagePythonApi(params)
+    ];
+
+    return this._tryMultipleApiFormats(attempts, "sendMessage");
   }
 
   /**
@@ -320,25 +316,38 @@ export class A2AClient {
       throw new Error("Agent does not support streaming (AgentCard.capabilities.streaming is not true).");
     }
 
-    const apiVariant = await this._detectApiVariant();
-    
-    if (apiVariant === 'python') {
+    // Try TypeScript API first, then Python API
+    const streamAttempts = [
+      () => this._sendMessageStreamTypescriptApi(params),
+      () => this._sendMessageStreamPythonApi(params)
+    ];
+
+    for (let i = 0; i < streamAttempts.length; i++) {
       try {
-        yield* this._sendMessageStreamPythonApi(params);
-        return;
+        yield* streamAttempts[i]();
+        return; // Success, exit the function
       } catch (error: any) {
-        // If Python API fails, try TypeScript API as fallback
-        if (error.message.includes('establishing stream') && (error.message.includes('404') || error.message.includes('Method not found'))) {
-          console.log('Python streaming API failed, trying TypeScript API...');
-          this.apiVariant = 'typescript';
-          // Continue to TypeScript API below
-        } else {
-          throw error;
+        const shouldTryNextFormat = error.message.includes('establishing stream') && 
+                                  (error.message.includes('404') || 
+                                   error.message.includes('Method not found') ||
+                                   error.message.includes('-32601') || // Method not found JSON-RPC error
+                                   error.message.includes('-32600')); // Invalid request JSON-RPC error (payload validation)
+        
+        if (shouldTryNextFormat && i < streamAttempts.length - 1) {
+          console.log(`Streaming attempt ${i + 1} failed (${error.message.includes('-32600') ? 'payload validation error' : 'method not found'}), trying next format...`);
+          continue;
         }
+        
+        // If it's not a format-related error, or this is the last attempt, throw the error
+        throw error;
       }
     }
+  }
 
-    // TypeScript API (original implementation)
+  /**
+   * Helper method for TypeScript streaming API
+   */
+  private async *_sendMessageStreamTypescriptApi(params: MessageSendParams): AsyncGenerator<A2AStreamEventData, void, undefined> {
     const endpoint = await this._getServiceEndpoint();
     const clientRequestId = this.requestIdCounter++; // Use a unique ID for this stream request
     const rpcRequest: JSONRPCRequest = { // This is the initial JSON-RPC request to establish the stream
@@ -358,14 +367,6 @@ export class A2AClient {
     });
 
     if (!response.ok) {
-      // If this fails and we haven't tried Python API yet, try it as fallback
-      if (this.apiVariant !== 'python' && (response.status === 404 || response.status === 400)) {
-        console.log('TypeScript streaming API failed, trying Python API...');
-        this.apiVariant = 'python';
-        yield* this._sendMessageStreamPythonApi(params);
-        return;
-      }
-
       // Attempt to read error body for more details
       let errorBody = "";
       try {
@@ -381,6 +382,7 @@ export class A2AClient {
       }
       throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}`);
     }
+    
     if (!response.headers.get("Content-Type")?.startsWith("text/event-stream")) {
       // Server should explicitly set this content type for SSE.
       throw new Error("Invalid response Content-Type for SSE stream. Expected 'text/event-stream'.");

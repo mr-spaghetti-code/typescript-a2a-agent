@@ -1,4 +1,5 @@
 import express, { Request, Response, Express } from 'express';
+import cors from 'cors';
 
 import { A2AError } from "./error.js";
 import { schema } from "./index.js";
@@ -22,6 +23,14 @@ export class A2AExpressApp {
      */
     public setupRoutes(app: Express, baseUrl: string = ''): Express {
         app.use(express.json());
+
+        // Configure CORS to allow cross-origin requests
+        app.use(cors({
+            origin: '*', // Allow all origins
+            methods: ['GET', 'POST', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+            credentials: false
+        }));
 
         // Request logging middleware
         app.use((req: Request, res: Response, next) => {
