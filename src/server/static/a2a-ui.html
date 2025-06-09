@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A2A Agent UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            height: 80vh;
+            max-height: 700px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .connection-section {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .connection-form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .connection-form input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .connection-form input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.connecting {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message.user {
+            justify-content: flex-end;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .message.user .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.agent .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e9ecef;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message.system .message-content {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            font-style: italic;
+            max-width: 100%;
+            text-align: center;
+        }
+        
+        .input-section {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .input-form {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .input-form textarea {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            max-height: 100px;
+            transition: border-color 0.2s;
+        }
+        
+        .input-form textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn-send {
+            background: #28a745;
+            color: white;
+            align-self: flex-end;
+        }
+        
+        .btn-send:hover {
+            background: #218838;
+        }
+        
+        .btn-send:disabled {
+            background: #a0aec0;
+        }
+        
+        .streaming-toggle {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .toggle.active {
+            background: #667eea;
+        }
+        
+        .toggle::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+        
+        .toggle.active::before {
+            transform: translateX(20px);
+        }
+        
+        @media (max-width: 600px) {
+            .connection-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .connection-form input {
+                min-width: unset;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>A2A Agent Interface</h1>
+            <p>Connect to and interact with A2A-compliant agents</p>
+        </div>
+        
+        <div class="connection-section">
+            <div class="connection-form">
+                <input 
+                    type="url" 
+                    id="agentUrl" 
+                    placeholder="Agent Base URL (e.g., https://agent.example.com)" 
+                    value="http://localhost:41241"
+                >
+                <button class="btn btn-primary" id="connectBtn">Connect</button>
+            </div>
+            <div id="connectionStatus" class="status" style="display: none;"></div>
+        </div>
+        
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message system">
+                    <div class="message-content">
+                        Enter an agent URL above and click Connect to start chatting
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-section">
+                <div class="input-form">
+                    <textarea 
+                        id="messageInput" 
+                        placeholder="Type your message here..." 
+                        rows="2"
+                        disabled
+                    ></textarea>
+                    <button class="btn btn-send" id="sendBtn" disabled>Send</button>
+                </div>
+                <div class="streaming-toggle">
+                    <span>Streaming:</span>
+                    <div class="toggle" id="streamingToggle">
+                    </div>
+                    <span id="streamingLabel">Off</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // A2A Client implementation (robust browser version matching client.ts)
+        class A2AClient {
+            constructor(agentBaseUrl) {
+                this.agentBaseUrl = agentBaseUrl.replace(/\/$/, "");
+                this.requestIdCounter = 1;
+                this.serviceEndpointUrl = null;
+            }
+            
+            async getAgentCard() {
+                const agentCardUrl = `${this.agentBaseUrl}/.well-known/agent.json`;
+                const response = await fetch(agentCardUrl, {
+                    headers: { 'Accept': 'application/json' },
+                });
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch Agent Card: ${response.status} ${response.statusText}`);
+                }
+                const agentCard = await response.json();
+                this.serviceEndpointUrl = agentCard.url;
+                return agentCard;
+            }
+            
+            // Helper method to systematically try different API formats
+            async _tryMultipleApiFormats(attempts, operationName) {
+                let lastError = null;
+                
+                for (let i = 0; i < attempts.length; i++) {
+                    try {
+                        return await attempts[i]();
+                    } catch (error) {
+                        lastError = error;
+                        // Check if this is a format-related error
+                        const shouldTryNextFormat = error.message.includes('Method not found') || 
+                                                  error.message.includes('404') || 
+                                                  error.message.includes('-32601') || // Method not found JSON-RPC error
+                                                  error.message.includes('-32600'); // Invalid request JSON-RPC error
+                        
+                        if (shouldTryNextFormat && i < attempts.length - 1) {
+                            console.log(`${operationName} attempt ${i + 1} failed (${error.message.includes('-32600') ? 'payload validation error' : 'method not found'}), trying next format...`);
+                            continue;
+                        }
+                        
+                        // If it's not a format-related error, or this is the last attempt, throw the error
+                        if (!shouldTryNextFormat || i === attempts.length - 1) {
+                            throw error;
+                        }
+                    }
+                }
+                
+                throw lastError || new Error(`All ${operationName} attempts failed`);
+            }
+            
+            // Helper method to convert parts for Python API
+            _convertPartsForPythonApi(parts) {
+                return parts.map(part => {
+                    if (part.kind === 'text') {
+                        return { type: 'text', text: part.text };
+                    } else if (part.kind === 'file') {
+                        return { type: 'file', file: part.file };
+                    } else if (part.kind === 'data') {
+                        return { type: 'data', data: part.data };
+                    }
+                    return part;
+                });
+            }
+            
+            // Generate unique task ID
+            _generateTaskId() {
+                return `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            }
+            
+            async sendMessage(params) {
+                const attempts = [
+                    // First attempt: Standard TypeScript API
+                    () => this._postRpcRequest("message/send", params),
+                    
+                    // Second attempt: Python API format
+                    () => this._sendMessagePythonApi(params)
+                ];
+
+                return this._tryMultipleApiFormats(attempts, "sendMessage");
+            }
+            
+            async _postRpcRequest(method, params) {
+                if (!this.serviceEndpointUrl) {
+                    await this.getAgentCard();
+                }
+                
+                const requestId = this.requestIdCounter++;
+                const rpcRequest = {
+                    jsonrpc: "2.0",
+                    method: method,
+                    params: params,
+                    id: requestId,
+                };
+
+                const response = await fetch(this.serviceEndpointUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                    body: JSON.stringify(rpcRequest),
+                });
+
+                if (!response.ok) {
+                    let errorBodyText = '(empty or non-JSON response)';
+                    try {
+                        errorBodyText = await response.text();
+                        const errorJson = JSON.parse(errorBodyText);
+                        if (errorJson.jsonrpc && errorJson.error) {
+                            throw new Error(`RPC error for ${method}: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+                        }
+                    } catch (e) {
+                        if (e.message.startsWith('RPC error for')) throw e;
+                    }
+                    throw new Error(`HTTP error for ${method}! Status: ${response.status} ${response.statusText}. Response: ${errorBodyText}`);
+                }
+
+                const rpcResponse = await response.json();
+                if (rpcResponse.error) {
+                    throw new Error(`RPC Error: ${rpcResponse.error.message} (Code: ${rpcResponse.error.code})`);
+                }
+
+                return rpcResponse.result;
+            }
+            
+            async _sendMessagePythonApi(params) {
+                // Generate a task ID if not provided
+                const taskId = params.message.taskId || this._generateTaskId();
+                
+                // Generate a session ID - this is required by Python API
+                const sessionId = this._generateTaskId();
+                
+                // Convert message parts to Python format
+                const convertedParts = this._convertPartsForPythonApi(params.message.parts);
+                
+                // Create Python API payload
+                const pythonParams = {
+                    id: taskId,
+                    sessionId: sessionId,
+                    message: {
+                        messageId: params.message.messageId,
+                        role: params.message.role,
+                        parts: convertedParts,
+                        ...(params.message.metadata && { metadata: params.message.metadata }),
+                        ...(params.message.referenceTaskIds && { referenceTaskIds: params.message.referenceTaskIds })
+                    },
+                    // Configuration fields at top level for Python API
+                    ...(params.configuration && { 
+                        blocking: params.configuration.blocking !== false, // Default to true for non-streaming
+                        acceptedOutputModes: params.configuration.acceptedOutputModes || ["text/plain"],
+                        ...(params.configuration.historyLength && { historyLength: params.configuration.historyLength }),
+                        ...(params.configuration.pushNotificationConfig && { pushNotification: params.configuration.pushNotificationConfig })
+                    }),
+                    ...(params.metadata && { metadata: params.metadata })
+                };
+
+                return this._postRpcRequest("tasks/send", pythonParams);
+            }
+            
+            async* sendMessageStream(params) {
+                // Try TypeScript API first, then Python API
+                const streamAttempts = [
+                    () => this._sendMessageStreamTypescriptApi(params),
+                    () => this._sendMessageStreamPythonApi(params)
+                ];
+
+                for (let i = 0; i < streamAttempts.length; i++) {
+                    try {
+                        yield* streamAttempts[i]();
+                        return; // Success, exit the function
+                    } catch (error) {
+                        const shouldTryNextFormat = error.message.includes('establishing stream') && 
+                                                  (error.message.includes('404') || 
+                                                   error.message.includes('Method not found') ||
+                                                   error.message.includes('-32601') || // Method not found JSON-RPC error
+                                                   error.message.includes('-32600')); // Invalid request JSON-RPC error
+                        
+                        if (shouldTryNextFormat && i < streamAttempts.length - 1) {
+                            console.log(`Streaming attempt ${i + 1} failed (${error.message.includes('-32600') ? 'payload validation error' : 'method not found'}), trying next format...`);
+                            continue;
+                        }
+                        
+                        // If it's not a format-related error, or this is the last attempt, throw the error
+                        throw error;
+                    }
+                }
+            }
+            
+            async* _sendMessageStreamTypescriptApi(params) {
+                if (!this.serviceEndpointUrl) {
+                    await this.getAgentCard();
+                }
+                
+                const requestId = this.requestIdCounter++;
+                const rpcRequest = {
+                    jsonrpc: "2.0",
+                    method: "message/stream",
+                    params: params,
+                    id: requestId,
+                };
+
+                const response = await fetch(this.serviceEndpointUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
+                    },
+                    body: JSON.stringify(rpcRequest),
+                });
+
+                if (!response.ok) {
+                    let errorBody = "";
+                    try {
+                        errorBody = await response.text();
+                        const errorJson = JSON.parse(errorBody);
+                        if (errorJson.error) {
+                            throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+                        }
+                    } catch (e) {
+                        if (e.message.startsWith('HTTP error establishing stream')) throw e;
+                        throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`);
+                    }
+                    throw new Error(`HTTP error establishing stream for message/stream: ${response.status} ${response.statusText}`);
+                }
+
+                yield* this._parseA2ASseStream(response, requestId);
+            }
+            
+            async* _sendMessageStreamPythonApi(params) {
+                // Generate a task ID if not provided
+                const taskId = params.message.taskId || this._generateTaskId();
+                
+                // Generate a session ID - this is required by Python API
+                const sessionId = this._generateTaskId();
+                
+                // Convert message parts to Python format
+                const convertedParts = this._convertPartsForPythonApi(params.message.parts);
+                
+                // Create Python API payload - streaming version still uses tasks/send 
+                const pythonParams = {
+                    id: taskId,
+                    sessionId: sessionId,
+                    message: {
+                        messageId: params.message.messageId,
+                        role: params.message.role,
+                        parts: convertedParts,
+                        ...(params.message.metadata && { metadata: params.message.metadata }),
+                        ...(params.message.referenceTaskIds && { referenceTaskIds: params.message.referenceTaskIds })
+                    },
+                    // For streaming, we set blocking to false and use streaming headers
+                    blocking: false,
+                    ...(params.configuration && { 
+                        acceptedOutputModes: params.configuration.acceptedOutputModes || ["text/plain"],
+                        ...(params.configuration.historyLength && { historyLength: params.configuration.historyLength }),
+                        ...(params.configuration.pushNotificationConfig && { pushNotification: params.configuration.pushNotificationConfig })
+                    }),
+                    ...(params.metadata && { metadata: params.metadata })
+                };
+
+                if (!this.serviceEndpointUrl) {
+                    await this.getAgentCard();
+                }
+                
+                const requestId = this.requestIdCounter++;
+                const rpcRequest = {
+                    jsonrpc: "2.0",
+                    method: "tasks/send",  // Python streaming uses tasks/send, not tasks/stream
+                    params: pythonParams,
+                    id: requestId,
+                };
+
+                const response = await fetch(this.serviceEndpointUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",  // This tells the Python server to stream
+                    },
+                    body: JSON.stringify(rpcRequest),
+                });
+
+                if (!response.ok) {
+                    let errorBody = "";
+                    try {
+                        errorBody = await response.text();
+                        const errorJson = JSON.parse(errorBody);
+                        if (errorJson.error) {
+                            throw new Error(`HTTP error establishing stream for tasks/send: ${response.status} ${response.statusText}. RPC Error: ${errorJson.error.message} (Code: ${errorJson.error.code})`);
+                        }
+                    } catch (e) {
+                        if (e.message.startsWith('HTTP error establishing stream')) throw e;
+                        throw new Error(`HTTP error establishing stream for tasks/send: ${response.status} ${response.statusText}. Response: ${errorBody || '(empty)'}`);
+                    }
+                    throw new Error(`HTTP error establishing stream for tasks/send: ${response.status} ${response.statusText}`);
+                }
+
+                // Check if streaming response or regular response
+                const contentType = response.headers.get("Content-Type");
+                if (contentType && contentType.startsWith("text/event-stream")) {
+                    // SSE streaming response
+                    yield* this._parseA2ASseStream(response, requestId);
+                } else {
+                    // Regular JSON response - convert to streaming format
+                    const jsonResponse = await response.json();
+                    if (jsonResponse.result) {
+                        // Emit the result as a single stream event
+                        yield jsonResponse.result;
+                    }
+                }
+            }
+            
+            async* _parseA2ASseStream(response, originalRequestId) {
+                const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+                let buffer = "";
+                let eventDataBuffer = "";
+
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            if (eventDataBuffer.trim()) {
+                                const result = this._processSseEventData(eventDataBuffer, originalRequestId);
+                                yield result;
+                            }
+                            break;
+                        }
+
+                        buffer += value;
+                        let lineEndIndex;
+                        
+                        while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
+                            const line = buffer.substring(0, lineEndIndex).trim();
+                            buffer = buffer.substring(lineEndIndex + 1);
+
+                            if (line === "") {
+                                if (eventDataBuffer) {
+                                    const result = this._processSseEventData(eventDataBuffer, originalRequestId);
+                                    yield result;
+                                    eventDataBuffer = "";
+                                }
+                            } else if (line.startsWith("data:")) {
+                                eventDataBuffer += line.substring(5).trimStart() + "\n";
+                            }
+                        }
+                    }
+                } finally {
+                    reader.releaseLock();
+                }
+            }
+            
+            _processSseEventData(jsonData, originalRequestId) {
+                if (!jsonData.trim()) {
+                    throw new Error("Attempted to process empty SSE event data.");
+                }
+                
+                const sseJsonRpcResponse = JSON.parse(jsonData.replace(/\n$/, ''));
+                
+                if (sseJsonRpcResponse.error) {
+                    throw new Error(`SSE event contained an error: ${sseJsonRpcResponse.error.message} (Code: ${sseJsonRpcResponse.error.code})`);
+                }
+
+                if (!('result' in sseJsonRpcResponse) || typeof sseJsonRpcResponse.result === 'undefined') {
+                    throw new Error(`SSE event JSON-RPC response is missing 'result' field. Data: ${jsonData}`);
+                }
+
+                return sseJsonRpcResponse.result;
+            }
+        }
+
+        // UI Logic
+        let client = null;
+        let isConnected = false;
+        let isStreaming = false;
+        
+        const elements = {
+            agentUrl: document.getElementById('agentUrl'),
+            connectBtn: document.getElementById('connectBtn'),
+            connectionStatus: document.getElementById('connectionStatus'),
+            messages: document.getElementById('messages'),
+            messageInput: document.getElementById('messageInput'),
+            sendBtn: document.getElementById('sendBtn'),
+            streamingToggle: document.getElementById('streamingToggle'),
+            streamingLabel: document.getElementById('streamingLabel')
+        };
+        
+        // Generate unique message ID
+        function generateMessageId() {
+            return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        }
+        
+        // Add message to chat
+        function addMessage(content, type = 'user') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            messageDiv.appendChild(contentDiv);
+            elements.messages.appendChild(messageDiv);
+            elements.messages.scrollTop = elements.messages.scrollHeight;
+        }
+        
+        // Show status
+        function showStatus(message, type = 'connecting') {
+            elements.connectionStatus.textContent = message;
+            elements.connectionStatus.className = `status ${type}`;
+            elements.connectionStatus.style.display = 'block';
+        }
+        
+        // Connect to agent
+        async function connectToAgent() {
+            const url = elements.agentUrl.value.trim();
+            if (!url) {
+                showStatus('Please enter an agent URL', 'error');
+                return;
+            }
+            
+            elements.connectBtn.disabled = true;
+            elements.connectBtn.textContent = 'Connecting...';
+            showStatus('Connecting to agent...', 'connecting');
+            
+            try {
+                client = new A2AClient(url);
+                const agentCard = await client.getAgentCard();
+                
+                isConnected = true;
+                elements.connectBtn.textContent = 'Connected';
+                elements.messageInput.disabled = false;
+                elements.sendBtn.disabled = false;
+                
+                showStatus(`Connected to ${agentCard.name || 'Agent'}`, 'connected');
+                addMessage(`Connected to ${agentCard.name || 'Agent'}. You can now start chatting!`, 'system');
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                showStatus(`Connection failed: ${error.message}`, 'error');
+                elements.connectBtn.disabled = false;
+                elements.connectBtn.textContent = 'Connect';
+            }
+        }
+        
+        // Send message
+        async function sendMessage() {
+            const message = elements.messageInput.value.trim();
+            if (!message || !isConnected) return;
+            
+            elements.sendBtn.disabled = true;
+            elements.sendBtn.textContent = 'Sending...';
+            elements.messageInput.disabled = true;
+            
+            addMessage(message, 'user');
+            elements.messageInput.value = '';
+            
+            try {
+                const messageParams = {
+                    message: {
+                        messageId: generateMessageId(),
+                        role: 'user',
+                        parts: [{ kind: 'text', text: message }]
+                    },
+                    configuration: {
+                        acceptedOutputModes: ['text/plain'],
+                        blocking: !isStreaming
+                    }
+                };
+                
+                if (isStreaming) {
+                    let responseText = '';
+                    let isFirstChunk = true;
+                    
+                    for await (const event of client.sendMessageStream(messageParams)) {
+                        console.log('Streaming event received:', event);
+                        
+                        if (event.kind === 'message' && event.role === 'agent') {
+                            for (const part of event.parts) {
+                                // Handle both TypeScript format (kind) and Python format (type)
+                                if (part.kind === 'text' || part.type === 'text') {
+                                    responseText += part.text;
+                                }
+                            }
+                            
+                            // Update the last message or create new one
+                            const lastMessage = elements.messages.lastElementChild;
+                            if (isFirstChunk || !lastMessage || !lastMessage.classList.contains('agent')) {
+                                addMessage(responseText, 'agent');
+                                isFirstChunk = false;
+                            } else {
+                                lastMessage.querySelector('.message-content').textContent = responseText;
+                            }
+                        } else if (event.kind === 'task') {
+                            // Handle task events in streaming
+                            addMessage(`Task ${event.id} - Status: ${event.status?.state || 'unknown'}`, 'system');
+                        }
+                    }
+                } else {
+                    const response = await client.sendMessage(messageParams);
+                    console.log('Non-streaming response received:', response);
+                    
+                    if (response.kind === 'message' && response.role === 'agent') {
+                        const responseText = response.parts
+                            .filter(part => part.kind === 'text' || part.type === 'text') // Handle both formats
+                            .map(part => part.text)
+                            .join('');
+                        addMessage(responseText, 'agent');
+                    } else if (response.kind === 'task' || (response.id && response.status && response.artifacts)) {
+                        // Handle task responses (with or without explicit kind field)
+                        let foundContent = false;
+                        
+                        // First, check artifacts for agent responses
+                        if (response.artifacts && response.artifacts.length > 0) {
+                            for (const artifact of response.artifacts) {
+                                if (artifact.parts && artifact.parts.length > 0) {
+                                    const artifactText = artifact.parts
+                                        .filter(part => part.kind === 'text' || part.type === 'text')
+                                        .map(part => part.text)
+                                        .join('');
+                                    
+                                    if (artifactText.trim()) {
+                                        addMessage(artifactText, 'agent');
+                                        foundContent = true;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // If no artifacts, check task history for agent messages
+                        if (!foundContent && response.history && response.history.length > 0) {
+                            const agentMessages = response.history
+                                .filter(msg => msg.role === 'agent')
+                                .map(msg => msg.parts
+                                    ?.filter(part => part.kind === 'text' || part.type === 'text')
+                                    ?.map(part => part.text)
+                                    ?.join('') || ''
+                                )
+                                .filter(text => text.length > 0);
+                            
+                            if (agentMessages.length > 0) {
+                                agentMessages.forEach(text => addMessage(text, 'agent'));
+                                foundContent = true;
+                            }
+                        }
+                        
+                        // If still no content found, show task status
+                        if (!foundContent) {
+                            addMessage(`Task ${response.id} ${response.status?.state || 'created'}. No content found.`, 'system');
+                        }
+                    } else {
+                        // Log unexpected response format for debugging
+                        console.warn('Unexpected response format:', response);
+                        addMessage('Received response but could not extract text content.', 'system');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Send failed:', error);
+                addMessage(`Error: ${error.message}`, 'system');
+            }
+            
+            elements.sendBtn.disabled = false;
+            elements.sendBtn.textContent = 'Send';
+            elements.messageInput.disabled = false;
+            elements.messageInput.focus();
+        }
+        
+        // Toggle streaming
+        function toggleStreaming() {
+            isStreaming = !isStreaming;
+            elements.streamingToggle.classList.toggle('active', isStreaming);
+            elements.streamingLabel.textContent = isStreaming ? 'On' : 'Off';
+        }
+        
+        // Event listeners
+        elements.connectBtn.addEventListener('click', connectToAgent);
+        elements.sendBtn.addEventListener('click', sendMessage);
+        elements.streamingToggle.addEventListener('click', toggleStreaming);
+        
+        elements.messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        elements.agentUrl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                connectToAgent();
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -1,5 +1,10 @@
 import express, { Request, Response, Express } from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import { A2AError } from "./error.js";
 import { schema } from "./index.js";
@@ -48,6 +53,12 @@ export class A2AExpressApp {
                 console.error("Error fetching agent card:", error);
                 res.status(500).json({ error: "Failed to retrieve agent card" });
             }
+        });
+
+        // A2A UI Route - Web interface for testing agents
+        app.get(`${baseUrl}/a2a-ui`, (req: Request, res: Response) => {
+            const htmlFilePath = path.join(__dirname, 'static', 'a2a-ui.html');
+            res.sendFile(htmlFilePath);
         });
 
         app.post(baseUrl, async (req: Request, res: Response) => {
